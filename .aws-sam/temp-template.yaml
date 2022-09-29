@@ -1,0 +1,11 @@
+Resources:
+  Function:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 300
+      MemorySize: 128
+      Handler: app.handler
+      CodeUri: C:\Users\croissam\Documents\GitHub\trivia\trivia-backend\send_question
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
