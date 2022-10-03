@@ -1,0 +1,570 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'simple-websockets-chat-app
+
+  SAM Template for simple-websockets-chat-app that has the DynamoDB table and Lambda
+  functions needed to demonstrate the Websocket protocol on API Gateway.
+
+  '
+Parameters:
+  WebSocketTable:
+    Type: String
+    Default: simplechat_connections
+    Description: (Required) The name of the new DynamoDB to store connection identifiers
+      for each connected clients. Minimum 3 characters
+    MinLength: 3
+    MaxLength: 50
+    AllowedPattern: ^[A-Za-z_]+$
+    ConstraintDescription: Required. Can be characters and underscore only. No numbers
+      or special characters allowed.
+  QuestionTable:
+    Type: String
+    Default: questions
+    Description: The dynamodb question table
+    MinLength: 3
+    MaxLength: 50
+    AllowedPattern: ^[A-Za-z_]+$
+    ConstraintDescription: None
+Resources:
+  SimpleChatWebSocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: SimpleChatWebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+    Metadata:
+      SamResourceId: SimpleChatWebSocket
+  QuestionApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: QuestionApi
+    Metadata:
+      SamResourceId: QuestionApi
+  AddQuestionResource:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: ANY
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri:
+          Fn::Sub:
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn:
+              Fn::GetAtt:
+              - AddQuestionFunction
+              - Arn
+      ResourceId:
+        Fn::GetAtt:
+        - QuestionApi
+        - RootResourceId
+      RestApiId:
+        Ref: QuestionApi
+    Metadata:
+      SamResourceId: AddQuestionResource
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+    - AddQuestionResource
+    Properties:
+      RestApiId:
+        Ref: QuestionApi
+    Metadata:
+      SamResourceId: ApiGatewayDeployment
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId:
+        Ref: ApiGatewayDeployment
+      RestApiId:
+        Ref: QuestionApi
+      StageName: echo
+    Metadata:
+      SamResourceId: ApiStage
+  LambdaApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - AddQuestionFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/
+    Metadata:
+      SamResourceId: LambdaApiGatewayInvoke
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: SimpleChatWebSocket
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target:
+        Fn::Join:
+        - /
+        - - integrations
+          - Ref: ConnectInteg
+    Metadata:
+      SamResourceId: ConnectRoute
+  ConnectInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: SimpleChatWebSocket
+      Description: Connect Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations
+    Metadata:
+      SamResourceId: ConnectInteg
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: SimpleChatWebSocket
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      OperationName: DisconnectRoute
+      Target:
+        Fn::Join:
+        - /
+        - - integrations
+          - Ref: DisconnectInteg
+    Metadata:
+      SamResourceId: DisconnectRoute
+  DisconnectInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: SimpleChatWebSocket
+      Description: Disconnect Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations
+    Metadata:
+      SamResourceId: DisconnectInteg
+  SendRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId:
+        Ref: SimpleChatWebSocket
+      RouteKey: sendmessage
+      AuthorizationType: NONE
+      OperationName: SendRoute
+      Target:
+        Fn::Join:
+        - /
+        - - integrations
+          - Ref: SendInteg
+    Metadata:
+      SamResourceId: SendRoute
+  SendInteg:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId:
+        Ref: SimpleChatWebSocket
+      Description: Send Integration
+      IntegrationType: AWS_PROXY
+      IntegrationUri:
+        Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendMessageFunction.Arn}/invocations
+    Metadata:
+      SamResourceId: SendInteg
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+    - ConnectRoute
+    - SendRoute
+    - DisconnectRoute
+    Properties:
+      ApiId:
+        Ref: SimpleChatWebSocket
+    Metadata:
+      SamResourceId: Deployment
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: Prod
+      Description: Prod Stage
+      DeploymentId:
+        Ref: Deployment
+      ApiId:
+        Ref: SimpleChatWebSocket
+    Metadata:
+      SamResourceId: Stage
+  ConnectionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: connectionId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: connectionId
+        KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      SSESpecification:
+        SSEEnabled: true
+      TableName:
+        Ref: WebSocketTable
+    Metadata:
+      SamResourceId: ConnectionsTable
+  QuestionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: questionId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: questionId
+        KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      SSESpecification:
+        SSEEnabled: true
+      TableName:
+        Ref: QuestionTable
+    Metadata:
+      SamResourceId: QuestionsTable
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://webquizz/780b9d8d345a8d11e7625525cec632a0
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: WebSocketTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: WebSocketTable
+    Metadata:
+      SamResourceId: OnConnectFunction
+  OnConnectPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+    - SimpleChatWebSocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: OnConnectFunction
+      Principal: apigateway.amazonaws.com
+    Metadata:
+      SamResourceId: OnConnectPermission
+  OnDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://webquizz/7feee48eccdc0a973307d5ae716bb540
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: WebSocketTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: WebSocketTable
+    Metadata:
+      SamResourceId: OnDisconnectFunction
+  OnDisconnectPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+    - SimpleChatWebSocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: OnDisconnectFunction
+      Principal: apigateway.amazonaws.com
+    Metadata:
+      SamResourceId: OnDisconnectPermission
+  AddQuestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://webquizz/bac0efa0559686ff8748f444996fe5ee
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: QuestionTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: QuestionTable
+    Metadata:
+      SamResourceId: AddQuestionFunction
+  GetQuestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://webquizz/5bd1e1b94cc2d4a0160fa230cf7af56b
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: QuestionTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: QuestionTable
+    Metadata:
+      SamResourceId: GetQuestionFunction
+  GetQuestionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://webquizz/fabe984aa795cb2fe2be5deac99cb617
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: QuestionTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: QuestionTable
+    Metadata:
+      SamResourceId: GetQuestionsFunction
+  DeleteQuestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://webquizz/2541634a6ea74ceb871baf2e7c3adcbf
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: QuestionTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: QuestionTable
+    Metadata:
+      SamResourceId: DeleteQuestionFunction
+  SendQuestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://webquizz/ce4c39ee7314a11d2c7cbf28dbfdc563
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          QUESTION_TABLE_NAME:
+            Ref: QuestionTable
+          TABLE_NAME:
+            Ref: WebSocketTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: WebSocketTable
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: QuestionTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+          - Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*
+    Metadata:
+      SamResourceId: SendQuestionFunction
+  SendMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://webquizz/ce4c39ee7314a11d2c7cbf28dbfdc563
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: WebSocketTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: WebSocketTable
+      - Statement:
+        - Effect: Allow
+          Action:
+          - execute-api:ManageConnections
+          Resource:
+          - Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*
+    Metadata:
+      SamResourceId: SendMessageFunction
+  SendMessagePermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+    - SimpleChatWebSocket
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Ref: SendMessageFunction
+      Principal: apigateway.amazonaws.com
+    Metadata:
+      SamResourceId: SendMessagePermission
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: webquizz-spa
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LoggingConfiguration:
+        DestinationBucketName:
+          Ref: LoggingBucket
+        LogFilePrefix: s3-access-logs
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+    Metadata:
+      SamResourceId: S3Bucket
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+        - Sid: PolicyForCloudFrontPrivateContent
+          Effect: Allow
+          Principal:
+            CanonicalUser:
+              Fn::GetAtt:
+              - CFOriginAccessIdentity
+              - S3CanonicalUserId
+          Action: s3:GetObject*
+          Resource:
+            Fn::Join:
+            - ''
+            - - 'arn:aws:s3:::'
+              - Ref: S3Bucket
+              - /*
+      Bucket:
+        Ref: S3Bucket
+    Metadata:
+      SamResourceId: BucketPolicy
+  LoggingBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: webquizz-spa-logs
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      AccessControl: LogDeliveryWrite
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+    DeletionPolicy: Delete
+    Metadata:
+      SamResourceId: LoggingBucket
+  CFDistribution:
+    Type: AWS::CloudFront::Distribution
+    DependsOn:
+    - CFOriginAccessIdentity
+    Properties:
+      DistributionConfig:
+        Origins:
+        - DomainName:
+            Fn::GetAtt:
+            - S3Bucket
+            - RegionalDomainName
+          Id: myS3Origin
+          S3OriginConfig:
+            OriginAccessIdentity:
+              Fn::Sub: origin-access-identity/cloudfront/${CFOriginAccessIdentity}
+        Enabled: 'true'
+        DefaultRootObject: index.html
+        DefaultCacheBehavior:
+          AllowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+          TargetOriginId: myS3Origin
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
+          ViewerProtocolPolicy: redirect-to-https
+        PriceClass: PriceClass_All
+        Logging:
+          Bucket:
+            Fn::GetAtt:
+            - LoggingBucket
+            - RegionalDomainName
+          Prefix: cloudfront-access-logs
+    Metadata:
+      SamResourceId: CFDistribution
+  CFOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    DependsOn:
+    - S3Bucket
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment:
+          Fn::Sub: webquizz-spa
+    Metadata:
+      SamResourceId: CFOriginAccessIdentity
+Outputs:
+  ConnectionsTableArn:
+    Description: Connections table ARN
+    Value:
+      Fn::GetAtt:
+      - ConnectionsTable
+      - Arn
+  OnConnectFunctionArn:
+    Description: OnConnect function ARN
+    Value:
+      Fn::GetAtt:
+      - OnConnectFunction
+      - Arn
+  OnDisconnectFunctionArn:
+    Description: OnDisconnect function ARN
+    Value:
+      Fn::GetAtt:
+      - OnDisconnectFunction
+      - Arn
+  SendMessageFunctionArn:
+    Description: SendMessage function ARN
+    Value:
+      Fn::GetAtt:
+      - SendMessageFunction
+      - Arn
+  WebSocketURI:
+    Description: The WSS Protocol URI to connect to
+    Value:
+      Fn::Join:
+      - ''
+      - - wss://
+        - Ref: SimpleChatWebSocket
+        - .execute-api.
+        - Ref: AWS::Region
+        - .amazonaws.com/
+        - Ref: Stage
+  BucketName:
+    Value:
+      Fn::Sub: react-cors-spa-${CFOriginAccessIdentity}

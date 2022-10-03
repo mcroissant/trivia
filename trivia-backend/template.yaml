@@ -25,19 +25,13 @@ Parameters:
     ConstraintDescription: 'None'
 
 Resources:
-  SimpleChatWebSocket:
-    Type: AWS::ApiGatewayV2::Api
-    Properties:
-      Name: SimpleChatWebSocket
-      ProtocolType: WEBSOCKET
-      RouteSelectionExpression: "$request.body.action"
 
   QuestionApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
-      Name: QuestionApi  
-      
-    
+      Name: QuestionApi
+
+
   AddQuestionResource:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -76,26 +70,34 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/
 
+########### WebSocket Gateway #######################
 
+  SimpleChatWebSocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: SimpleChatWebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
 
   ConnectRoute:
-    Type: AWS::ApiGatewayV2::Route
-    Properties:
-      ApiId: !Ref SimpleChatWebSocket
-      RouteKey: $connect
-      AuthorizationType: NONE
-      OperationName: ConnectRoute
-      Target: !Join
-        - '/'
-        - - 'integrations'
-          - !Ref ConnectInteg
+  Type: AWS::ApiGatewayV2::Route
+  Properties:
+    ApiId: !Ref SimpleChatWebSocket
+    RouteKey: $connect
+    AuthorizationType: NONE
+    OperationName: ConnectRoute
+    Target: !Join
+      - '/'
+      - - 'integrations'
+        - !Ref ConnectInteg
+
   ConnectInteg:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
       ApiId: !Ref SimpleChatWebSocket
       Description: Connect Integration
       IntegrationType: AWS_PROXY
-      IntegrationUri: 
+      IntegrationUri:
         Fn::Sub:
           arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations
   DisconnectRoute:
@@ -115,9 +117,9 @@ Resources:
       ApiId: !Ref SimpleChatWebSocket
       Description: Disconnect Integration
       IntegrationType: AWS_PROXY
-      IntegrationUri: 
+      IntegrationUri:
         Fn::Sub:
-            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations
+          arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations
   SendRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -135,15 +137,15 @@ Resources:
       ApiId: !Ref SimpleChatWebSocket
       Description: Send Integration
       IntegrationType: AWS_PROXY
-      IntegrationUri: 
+      IntegrationUri:
         Fn::Sub:
           arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SendMessageFunction.Arn}/invocations
   Deployment:
     Type: AWS::ApiGatewayV2::Deployment
     DependsOn:
-    - ConnectRoute
-    - SendRoute
-    - DisconnectRoute
+      - ConnectRoute
+      - SendRoute
+      - DisconnectRoute
     Properties:
       ApiId: !Ref SimpleChatWebSocket
   Stage:
@@ -153,15 +155,18 @@ Resources:
       Description: Prod Stage
       DeploymentId: !Ref Deployment
       ApiId: !Ref SimpleChatWebSocket
+
+  ############## Dynamo DB Tables ###########################
+
   ConnectionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-      - AttributeName: "connectionId"
-        AttributeType: "S"
+        - AttributeName: "connectionId"
+          AttributeType: "S"
       KeySchema:
-      - AttributeName: "connectionId"
-        KeyType: "HASH"
+        - AttributeName: "connectionId"
+          KeyType: "HASH"
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
@@ -169,22 +174,26 @@ Resources:
         SSEEnabled: True
       TableName: !Ref WebSocketTable
 
-      
+
   QuestionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
       AttributeDefinitions:
-      - AttributeName: "questionId"
-        AttributeType: "S"
+        - AttributeName: "questionId"
+          AttributeType: "S"
       KeySchema:
-      - AttributeName: "questionId"
-        KeyType: "HASH"
+        - AttributeName: "questionId"
+          KeyType: "HASH"
       ProvisionedThroughput:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
       SSESpecification:
         SSEEnabled: True
       TableName: !Ref QuestionTable
+
+
+  #############  Websocket : Lambda functions   ##################
+
   OnConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -196,8 +205,8 @@ Resources:
         Variables:
           TABLE_NAME: !Ref WebSocketTable
       Policies:
-      - DynamoDBCrudPolicy:
-          TableName: !Ref WebSocketTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketTable
   OnConnectPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -217,8 +226,8 @@ Resources:
         Variables:
           TABLE_NAME: !Ref WebSocketTable
       Policies:
-      - DynamoDBCrudPolicy:
-          TableName: !Ref WebSocketTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketTable
   OnDisconnectPermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -227,6 +236,9 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref OnDisconnectFunction
       Principal: apigateway.amazonaws.com
+
+  #############  API : Lambda functions   ##################
+
   AddQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -238,8 +250,34 @@ Resources:
         Variables:
           TABLE_NAME: !Ref QuestionTable
       Policies:
-      - DynamoDBCrudPolicy:
-          TableName: !Ref QuestionTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref QuestionTable
+  GetQuestionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: get_question/
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref QuestionTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref QuestionTable
+  GetQuestionsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: get_questions/
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref QuestionTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref QuestionTable
   DeleteQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -251,8 +289,8 @@ Resources:
         Variables:
           TABLE_NAME: !Ref QuestionTable
       Policies:
-      - DynamoDBCrudPolicy:
-          TableName: !Ref QuestionTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref QuestionTable
   SendQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -265,16 +303,16 @@ Resources:
           QUESTION_TABLE_NAME: !Ref QuestionTable
           TABLE_NAME: !Ref WebSocketTable
       Policies:
-      - DynamoDBCrudPolicy:
-          TableName: !Ref WebSocketTable
-      - DynamoDBCrudPolicy:
-          TableName: !Ref QuestionTable
-      - Statement:
-        - Effect: Allow
-          Action:
-          - 'execute-api:ManageConnections'
-          Resource:
-          - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*'
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref QuestionTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - 'execute-api:ManageConnections'
+              Resource:
+                - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*'
   SendMessageFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -286,14 +324,14 @@ Resources:
         Variables:
           TABLE_NAME: !Ref WebSocketTable
       Policies:
-      - DynamoDBCrudPolicy:
-          TableName: !Ref WebSocketTable
-      - Statement:
-        - Effect: Allow
-          Action:
-          - 'execute-api:ManageConnections'
-          Resource:
-          - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*'
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - 'execute-api:ManageConnections'
+              Resource:
+                - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${SimpleChatWebSocket}/*'
   SendMessagePermission:
     Type: AWS::Lambda::Permission
     DependsOn:
@@ -303,16 +341,22 @@ Resources:
       FunctionName: !Ref SendMessageFunction
       Principal: apigateway.amazonaws.com
 
-  # The Amazon S3 bucket into which our Single Page Application build files must be deployed
+
+
+
+  ################### S3 Bucket ###################################
+
+
+
   S3Bucket:
     Type: 'AWS::S3::Bucket'
     Properties:
       BucketName: !Sub 'webquizz-spa'
       PublicAccessBlockConfiguration:
-        BlockPublicAcls : true
-        BlockPublicPolicy : true
-        IgnorePublicAcls : true
-        RestrictPublicBuckets : true
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
         LogFilePrefix: s3-access-logs
@@ -350,10 +394,10 @@ Resources:
     Properties:
       BucketName: !Sub 'webquizz-spa-logs'
       PublicAccessBlockConfiguration:
-        BlockPublicAcls : true
-        BlockPublicPolicy : true
-        IgnorePublicAcls : true
-        RestrictPublicBuckets : true
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       AccessControl: LogDeliveryWrite
       VersioningConfiguration:
         Status: Enabled
@@ -363,7 +407,10 @@ Resources:
               SSEAlgorithm: 'AES256'
     DeletionPolicy: Delete
 
-  # The Amazon CloudFront distribution exposing our Single Page Application
+
+  ##############   Cloud Front ########################
+
+
   CFDistribution:
     #checkov:skip=CKV_AWS_68: "For demo purposes and to reduce cost, no WAF is configured"
     Type: 'AWS::CloudFront::Distribution'
@@ -420,7 +467,7 @@ Outputs:
 
   WebSocketURI:
     Description: "The WSS Protocol URI to connect to"
-    Value: !Join [ '', [ 'wss://', !Ref SimpleChatWebSocket, '.execute-api.',!Ref 'AWS::Region','.amazonaws.com/',!Ref 'Stage'] ]
+    Value: !Join [ '', [ 'wss://', !Ref SimpleChatWebSocket, '.execute-api.',!Ref 'AWS::Region','.amazonaws.com/',!Ref 'Stage' ] ]
 
   BucketName:
     Value: !Sub "react-cors-spa-${CFOriginAccessIdentity}"

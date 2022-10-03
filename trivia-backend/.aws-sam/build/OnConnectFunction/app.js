@@ -9,11 +9,7 @@ exports.handler = async event => {
   const putParams = {
     TableName: process.env.TABLE_NAME,
     Item: {
-      questionId: event.body.questionId,
-      question: event.body.question,
-      answers: event.body.answers,
-      correctAnswer: event.body.correctAnswer,
-      duration: event.body.duration,
+      connectionId: event.requestContext.connectionId
     }
   };
 
