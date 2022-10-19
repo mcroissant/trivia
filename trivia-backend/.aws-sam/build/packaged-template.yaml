@@ -34,17 +34,219 @@ Resources:
       RouteSelectionExpression: $request.body.action
     Metadata:
       SamResourceId: SimpleChatWebSocket
+  StatisticApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: StatisticApi
+    Metadata:
+      SamResourceId: StatisticApi
+  StatisticResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: StatisticApi
+      PathPart: statistics
+      ParentId:
+        Fn::GetAtt:
+        - StatisticApi
+        - RootResourceId
+    Metadata:
+      SamResourceId: StatisticResource
+  GetStatsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri:
+          Fn::Sub:
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn:
+              Fn::GetAtt:
+              - GetGameStatisticsFunction
+              - Arn
+        IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+            method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
+            method.response.header.Access-Control-Allow-Origin: '''*'''
+      ResourceId:
+        Ref: StatisticResource
+      RestApiId:
+        Ref: StatisticApi
+      MethodResponses:
+      - ResponseParameters:
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Origin: true
+        StatusCode: '200'
+    Metadata:
+      SamResourceId: GetStatsMethod
+  GetStatsFunctionApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetGameStatisticsFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${StatisticApi}/*/*/*
+    Metadata:
+      SamResourceId: GetStatsFunctionApiGatewayInvoke
+  StatisticGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+    - GetStatsMethod
+    Properties:
+      RestApiId:
+        Ref: StatisticApi
+    Metadata:
+      SamResourceId: StatisticGatewayDeployment
+  StatisticApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId:
+        Ref: StatisticGatewayDeployment
+      RestApiId:
+        Ref: StatisticApi
+      StageName: PROD
+    Metadata:
+      SamResourceId: StatisticApiStage
   QuestionApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: QuestionApi
     Metadata:
       SamResourceId: QuestionApi
-  AddQuestionResource:
+  QuestionsResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: QuestionApi
+      PathPart: questions
+      ParentId:
+        Fn::GetAtt:
+        - QuestionApi
+        - RootResourceId
+    Metadata:
+      SamResourceId: QuestionsResource
+  QuestionResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId:
+        Ref: QuestionApi
+      PathPart: '{questionId}'
+      ParentId:
+        Ref: QuestionsResource
+    Metadata:
+      SamResourceId: QuestionResource
+  GetQuestionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
-      HttpMethod: ANY
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri:
+          Fn::Sub:
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn:
+              Fn::GetAtt:
+              - GetQuestionsFunction
+              - Arn
+        IntegrationResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+            method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
+            method.response.header.Access-Control-Allow-Origin: '''*'''
+      ResourceId:
+        Ref: QuestionsResource
+      RestApiId:
+        Ref: QuestionApi
+      MethodResponses:
+      - ResponseParameters:
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Origin: true
+        StatusCode: '200'
+    Metadata:
+      SamResourceId: GetQuestionsMethod
+  QuestionsResourceCors:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId:
+        Ref: QuestionsResource
+      RestApiId:
+        Ref: QuestionApi
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+            method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
+            method.response.header.Access-Control-Allow-Origin: '''*'''
+          ResponseTemplates:
+            application/json: ''
+          StatusCode: '200'
+        PassthroughBehavior: NEVER
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+      - ResponseModels:
+          application/json: Empty
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Origin: true
+        StatusCode: '200'
+    Metadata:
+      SamResourceId: QuestionsResourceCors
+  QuestionResourceCors:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ResourceId:
+        Ref: QuestionResource
+      RestApiId:
+        Ref: QuestionApi
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+            method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
+            method.response.header.Access-Control-Allow-Origin: '''*'''
+          ResponseTemplates:
+            application/json: ''
+          StatusCode: '200'
+        PassthroughBehavior: NEVER
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+      - ResponseModels:
+          application/json: Empty
+        ResponseParameters:
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Origin: true
+        StatusCode: '200'
+    Metadata:
+      SamResourceId: QuestionResourceCors
+  AddQuestionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
       Integration:
         IntegrationHttpMethod: POST
         Type: AWS_PROXY
@@ -55,18 +257,106 @@ Resources:
               Fn::GetAtt:
               - AddQuestionFunction
               - Arn
+        IntegrationResponses:
+        - StatusCode: 200
+          ResponseTemplates:
+            application/json: $input.json('$')
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+            method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
+            method.response.header.Access-Control-Allow-Origin: '''*'''
       ResourceId:
-        Fn::GetAtt:
-        - QuestionApi
-        - RootResourceId
+        Ref: QuestionsResource
       RestApiId:
         Ref: QuestionApi
+      MethodResponses:
+      - ResponseParameters:
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Origin: true
+        StatusCode: '200'
     Metadata:
-      SamResourceId: AddQuestionResource
+      SamResourceId: AddQuestionMethod
+  GetQuestionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri:
+          Fn::Sub:
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn:
+              Fn::GetAtt:
+              - GetQuestionFunction
+              - Arn
+        IntegrationResponses:
+        - StatusCode: 200
+          ResponseTemplates:
+            application/json: $input.json('$')
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+            method.response.header.Access-Control-Allow-Methods: '''GET,POST,PUT,DELETE,OPTIONS'''
+            method.response.header.Access-Control-Allow-Origin: '''*'''
+      ResourceId:
+        Ref: QuestionResource
+      RestApiId:
+        Ref: QuestionApi
+      MethodResponses:
+      - ResponseParameters:
+          method.response.header.Access-Control-Allow-Headers: true
+          method.response.header.Access-Control-Allow-Methods: true
+          method.response.header.Access-Control-Allow-Origin: true
+        StatusCode: '200'
+    Metadata:
+      SamResourceId: GetQuestionMethod
+  GetQuestionsFunctionApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetQuestionsFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/*
+    Metadata:
+      SamResourceId: GetQuestionsFunctionApiGatewayInvoke
+  GetQuestionFunctionApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetQuestionFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/*
+    Metadata:
+      SamResourceId: GetQuestionFunctionApiGatewayInvoke
+  AddQuestionFunctionApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - AddQuestionFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/*
+    Metadata:
+      SamResourceId: AddQuestionFunctionApiGatewayInvoke
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
-    - AddQuestionResource
+    - GetQuestionsMethod
+    - GetQuestionMethod
+    - AddQuestionMethod
     Properties:
       RestApiId:
         Ref: QuestionApi
@@ -79,22 +369,9 @@ Resources:
         Ref: ApiGatewayDeployment
       RestApiId:
         Ref: QuestionApi
-      StageName: echo
+      StageName: PROD
     Metadata:
       SamResourceId: ApiStage
-  LambdaApiGatewayInvoke:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName:
-        Fn::GetAtt:
-        - AddQuestionFunction
-        - Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn:
-        Fn::Sub: arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/
-    Metadata:
-      SamResourceId: LambdaApiGatewayInvoke
   ConnectRoute:
     Type: AWS::ApiGatewayV2::Route
     Properties:
@@ -234,7 +511,7 @@ Resources:
   OnConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://webquizz/780b9d8d345a8d11e7625525cec632a0
+      CodeUri: s3://webquizz-cloudformation/780b9d8d345a8d11e7625525cec632a0
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs12.x
@@ -262,7 +539,7 @@ Resources:
   OnDisconnectFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://webquizz/7feee48eccdc0a973307d5ae716bb540
+      CodeUri: s3://webquizz-cloudformation/7feee48eccdc0a973307d5ae716bb540
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs12.x
@@ -290,7 +567,7 @@ Resources:
   AddQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://webquizz/bac0efa0559686ff8748f444996fe5ee
+      CodeUri: s3://webquizz-cloudformation/ccb00b8021667d0812914ba45ed53190
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs12.x
@@ -307,7 +584,7 @@ Resources:
   GetQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://webquizz/5bd1e1b94cc2d4a0160fa230cf7af56b
+      CodeUri: s3://webquizz-cloudformation/51d52c89e578ca5f76811b33924c750e
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs12.x
@@ -324,7 +601,7 @@ Resources:
   GetQuestionsFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://webquizz/fabe984aa795cb2fe2be5deac99cb617
+      CodeUri: s3://webquizz-cloudformation/3c997a6ff122b7e235bb4ba179dc3ace
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs12.x
@@ -341,7 +618,7 @@ Resources:
   DeleteQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://webquizz/2541634a6ea74ceb871baf2e7c3adcbf
+      CodeUri: s3://webquizz-cloudformation/4f9a0cbf8cde8ecbafa774e4420dd7bb
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs12.x
@@ -355,10 +632,27 @@ Resources:
             Ref: QuestionTable
     Metadata:
       SamResourceId: DeleteQuestionFunction
+  GetGameStatisticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://webquizz-cloudformation/753e25460279d6aab96b63874c0261ec
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME:
+            Ref: WebSocketTable
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: WebSocketTable
+    Metadata:
+      SamResourceId: GetGameStatisticsFunction
   SendQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://webquizz/ce4c39ee7314a11d2c7cbf28dbfdc563
+      CodeUri: s3://webquizz-cloudformation/ce4c39ee7314a11d2c7cbf28dbfdc563
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs12.x
@@ -386,7 +680,7 @@ Resources:
   SendMessageFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://webquizz/ce4c39ee7314a11d2c7cbf28dbfdc563
+      CodeUri: s3://webquizz-cloudformation/ce4c39ee7314a11d2c7cbf28dbfdc563
       Handler: app.handler
       MemorySize: 256
       Runtime: nodejs12.x
@@ -427,10 +721,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      LoggingConfiguration:
-        DestinationBucketName:
-          Ref: LoggingBucket
-        LogFilePrefix: s3-access-logs
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -464,26 +754,6 @@ Resources:
         Ref: S3Bucket
     Metadata:
       SamResourceId: BucketPolicy
-  LoggingBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName:
-        Fn::Sub: webquizz-spa-logs
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      AccessControl: LogDeliveryWrite
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-        - ServerSideEncryptionByDefault:
-            SSEAlgorithm: AES256
-    DeletionPolicy: Delete
-    Metadata:
-      SamResourceId: LoggingBucket
   CFDistribution:
     Type: AWS::CloudFront::Distribution
     DependsOn:
@@ -511,12 +781,6 @@ Resources:
           OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf
           ViewerProtocolPolicy: redirect-to-https
         PriceClass: PriceClass_All
-        Logging:
-          Bucket:
-            Fn::GetAtt:
-            - LoggingBucket
-            - RegionalDomainName
-          Prefix: cloudfront-access-logs
     Metadata:
       SamResourceId: CFDistribution
   CFOriginAccessIdentity:

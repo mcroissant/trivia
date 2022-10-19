@@ -25,6 +25,77 @@ Parameters:
     ConstraintDescription: 'None'
 
 Resources:
+  SimpleChatWebSocket:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: SimpleChatWebSocket
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  StatisticApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: StatisticApi
+
+
+  StatisticResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref StatisticApi
+      PathPart: 'statistics'
+      ParentId: !GetAtt StatisticApi.RootResourceId
+
+
+  GetStatsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt GetGameStatisticsFunction.Arn
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      ResourceId: !Ref StatisticResource
+      RestApiId: !Ref StatisticApi
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+
+  GetStatsFunctionApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt GetGameStatisticsFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${StatisticApi}/*/*/*
+
+
+  StatisticGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - GetStatsMethod
+    Properties:
+      RestApiId: !Ref StatisticApi
+
+  # Enable logging of all HTTP requests
+  StatisticApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref StatisticGatewayDeployment
+      RestApiId: !Ref StatisticApi
+      StageName: PROD
+
 
   QuestionApi:
     Type: AWS::ApiGateway::RestApi
@@ -32,24 +103,191 @@ Resources:
       Name: QuestionApi
 
 
-  AddQuestionResource:
+  QuestionsResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref QuestionApi
+      PathPart: 'questions'
+      ParentId: !GetAtt QuestionApi.RootResourceId
+
+  QuestionResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref QuestionApi
+      PathPart: '{questionId}'
+      ParentId: !Ref QuestionsResource
+
+  GetQuestionsMethod:
     Type: AWS::ApiGateway::Method
     Properties:
       AuthorizationType: NONE
-      HttpMethod: ANY
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt GetQuestionsFunction.Arn
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      ResourceId: !Ref QuestionsResource
+      RestApiId: !Ref QuestionApi
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+
+  QuestionsResourceCors:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      ResourceId: !Ref QuestionsResource
+      RestApiId: !Ref QuestionApi
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+            StatusCode: '200'
+        PassthroughBehavior: NEVER
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+
+  QuestionResourceCors:
+    Type: "AWS::ApiGateway::Method"
+    Properties:
+      ResourceId: !Ref QuestionResource
+      RestApiId: !Ref QuestionApi
+      AuthorizationType: NONE
+      HttpMethod: OPTIONS
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+            ResponseTemplates:
+              application/json: ''
+            StatusCode: '200'
+        PassthroughBehavior: NEVER
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - ResponseModels:
+            application/json: Empty
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+
+
+  AddQuestionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: POST
       Integration:
         IntegrationHttpMethod: POST
         Type: AWS_PROXY
         Uri: !Sub
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
           - LambdaArn: !GetAtt AddQuestionFunction.Arn
-      ResourceId: !GetAtt QuestionApi.RootResourceId
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      ResourceId: !Ref QuestionsResource
       RestApiId: !Ref QuestionApi
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+
+  GetQuestionMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: GET
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - LambdaArn: !GetAtt GetQuestionFunction.Arn
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseTemplates:
+              application/json: $input.json('$')
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+      ResourceId: !Ref QuestionResource
+      RestApiId: !Ref QuestionApi
+      MethodResponses:
+        - ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
+          StatusCode: '200'
+
+  GetQuestionsFunctionApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt GetQuestionsFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/*
+
+  GetQuestionFunctionApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt GetQuestionFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/*
+
+  AddQuestionFunctionApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt AddQuestionFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/*
 
   ApiGatewayDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
-      - AddQuestionResource
+      - GetQuestionsMethod
+      - GetQuestionMethod
+      - AddQuestionMethod
     Properties:
       RestApiId: !Ref QuestionApi
 
@@ -59,38 +297,23 @@ Resources:
     Properties:
       DeploymentId: !Ref ApiGatewayDeployment
       RestApiId: !Ref QuestionApi
-      StageName: echo
+      StageName: PROD
 
   # Grant permission for the newly created API to invoke our Lambda function
-  LambdaApiGatewayInvoke:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !GetAtt AddQuestionFunction.Arn
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${QuestionApi}/*/*/
 
-########### WebSocket Gateway #######################
 
-  SimpleChatWebSocket:
-    Type: AWS::ApiGatewayV2::Api
-    Properties:
-      Name: SimpleChatWebSocket
-      ProtocolType: WEBSOCKET
-      RouteSelectionExpression: "$request.body.action"
 
   ConnectRoute:
-  Type: AWS::ApiGatewayV2::Route
-  Properties:
-    ApiId: !Ref SimpleChatWebSocket
-    RouteKey: $connect
-    AuthorizationType: NONE
-    OperationName: ConnectRoute
-    Target: !Join
-      - '/'
-      - - 'integrations'
-        - !Ref ConnectInteg
-
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref SimpleChatWebSocket
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Join
+        - '/'
+        - - 'integrations'
+          - !Ref ConnectInteg
   ConnectInteg:
     Type: AWS::ApiGatewayV2::Integration
     Properties:
@@ -155,9 +378,6 @@ Resources:
       Description: Prod Stage
       DeploymentId: !Ref Deployment
       ApiId: !Ref SimpleChatWebSocket
-
-  ############## Dynamo DB Tables ###########################
-
   ConnectionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -190,10 +410,6 @@ Resources:
       SSESpecification:
         SSEEnabled: True
       TableName: !Ref QuestionTable
-
-
-  #############  Websocket : Lambda functions   ##################
-
   OnConnectFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -236,9 +452,6 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref OnDisconnectFunction
       Principal: apigateway.amazonaws.com
-
-  #############  API : Lambda functions   ##################
-
   AddQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -291,6 +504,19 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref QuestionTable
+  GetGameStatisticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: get_game_statistics/
+      Handler: app.handler
+      MemorySize: 256
+      Runtime: nodejs12.x
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref WebSocketTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WebSocketTable
   SendQuestionFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -341,13 +567,7 @@ Resources:
       FunctionName: !Ref SendMessageFunction
       Principal: apigateway.amazonaws.com
 
-
-
-
-  ################### S3 Bucket ###################################
-
-
-
+  # The Amazon S3 bucket into which our Single Page Application build files must be deployed
   S3Bucket:
     Type: 'AWS::S3::Bucket'
     Properties:
@@ -357,9 +577,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      LoggingConfiguration:
-        DestinationBucketName: !Ref LoggingBucket
-        LogFilePrefix: s3-access-logs
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -387,30 +604,8 @@ Resources:
                 - /*
       Bucket: !Ref S3Bucket
 
-  # The Amazon S3 bucket into which access logs from S3 (for the application) and CloudFront will be put
-  LoggingBucket:
-    #checkov:skip=CKV_AWS_18: "This bucket is private and only for storing logs"
-    Type: 'AWS::S3::Bucket'
-    Properties:
-      BucketName: !Sub 'webquizz-spa-logs'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      AccessControl: LogDeliveryWrite
-      VersioningConfiguration:
-        Status: Enabled
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: 'AES256'
-    DeletionPolicy: Delete
 
-
-  ##############   Cloud Front ########################
-
-
+  # The Amazon CloudFront distribution exposing our Single Page Application
   CFDistribution:
     #checkov:skip=CKV_AWS_68: "For demo purposes and to reduce cost, no WAF is configured"
     Type: 'AWS::CloudFront::Distribution'
@@ -435,9 +630,6 @@ Resources:
           OriginRequestPolicyId: 88a5eaf4-2fd4-4709-b370-b4c650ea3fcf # CORS-S3Origin
           ViewerProtocolPolicy: redirect-to-https
         PriceClass: PriceClass_All
-        Logging:
-          Bucket: !GetAtt LoggingBucket.RegionalDomainName
-          Prefix: 'cloudfront-access-logs'
 
   # The Amazon CloudFront origin access identity
   CFOriginAccessIdentity:

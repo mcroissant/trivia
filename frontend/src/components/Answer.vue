@@ -1,5 +1,5 @@
 <script>
-import { store } from '.././store';
+import {store} from '.././store';
 
 export default {
   props: {
@@ -16,9 +16,11 @@ export default {
 </script>
 
 <template>
-  <button
-    class="w-full bg-gray-200 rounded-lg p-4 transition md:text-lg md:p-6"
-    @click="store.submitAnswer(text)"
-    v-html="text"
-  ></button>
+  <el-row class="mt-3 w-full">
+    <el-button size="large"
+               @click="store.submitAnswer(text)"
+               v-html="text"
+               class="w-full"
+               round></el-button>
+  </el-row>
 </template>

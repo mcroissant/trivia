@@ -2,6 +2,8 @@ import {createApp} from "vue";
 import App from './App.vue';
 import Admin from './Admin.vue';
 import Main from './Main.vue';
+import ElementPlus from 'element-plus'
+import 'element-plus/dist/index.css'
 import './index.css';
 import {createRouter, createWebHashHistory} from "vue-router/dist/vue-router";
 
@@ -28,6 +30,6 @@ const router = createRouter({
 
 
 // 5. Create and mount the root instance.
-const app = createApp(App).use(router).mount('#app')
+const app = createApp(App).use(router).use(ElementPlus).mount('#app')
 
 

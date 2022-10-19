@@ -11,12 +11,23 @@ const params = {
 
 
 exports.handler = async event => {
+
+  const response = {
+    statusCode: 200,
+    headers: {
+      "Access-Control-Allow-Headers" : "Content-Type",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "OPTIONS,POST,GET"
+    },
+    body:'',
+  };
   let question = null;
     try {
       questions = await ddb.scan(params).promise()
+      response.body = JSON.stringify(questions)
     } catch (err) {
         return {statusCode: 500, body: 'Failed to connect: ' + JSON.stringify(err)};
     }
 
-    return {statusCode: 200, body: JSON.stringify(questions)};
+    return response;
 };

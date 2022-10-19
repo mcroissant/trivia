@@ -1,65 +1,127 @@
 <template>
-  <div
-      class="grid grid-rows-6 grid-cols-1 text-gray-600 mx-auto w-11/12 md:w-8/12 lg:w-7/12 overflow-y-hidden custom-height"
-  >
-    <div class="row-span-1 mt-6">
-      <div
-          class="min-h-full items-center justify-between py-4 rounded-lg flex flex-col items-center"
-      >
-        <div
-            class="border-4 border-gray-400 p-3 w-full rounded-lg shadow-xl flex items-center justify-center md:p-5 mb-3"
-        >
-          <h1 class="text-center font-medium md:text-lg"
-          >Question / Réponse</h1>
-        </div>
-      </div>
-    </div>
-    <div class="row-span-1">
-      <div class="min-h-full flex flex-col justify-center">
-        <div class="grid grid-cols-1 gap-4 md:gap-4 md:grid-cols-2">
-          <textarea v-model="store.newMessage"></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="row-span-2">
-      <div class="min-h-full flex flex-col justify-center">
-        <div class="grid grid-cols-1 gap-4 md:gap-4 md:grid-cols-2">
-          <button
-              class="px-12 py-4 bg-gray-600 text-white text-lg rounded-lg hover:bg-gray-700 transition w-full"
-              @click="store.sendNewMessage()"
-          >
-            Send Data
-          </button>
-         
-        </div>
-      </div>
-    </div>
-  </div>
+  <el-container>
+    <el-main>
+      <el-tabs v-model="activeName" class="demo-tabs" @tab-click="handleClick">
+        <el-tab-pane label="User" name="questions">
+          <el-row :gutter="20">
+
+            <el-col :lg="16">
+              <div class="grid-content">
+                <el-card class="box-card">
+                  <template #header>
+                    <div class="card-header">
+                      <span>Existing questions</span>
+                    </div>
+                  </template>
+
+                  <Questions></Questions>
+
+                </el-card>
+              </div>
+            </el-col>
+
+            <el-col :lg="8">
+              <el-card class="box-card">
+                <template #header>
+                  <div class="card-header">
+                    <span>Adding questions</span>
+                  </div>
+                </template>
+                <el-form :model="question" label-width="120px">
+                  <el-form-item label="Question">
+                    <el-input v-model="question.question"/>
+                  </el-form-item>
+                  <el-form-item label="Answer" v-for="index in question.answersCount" :key="index">
+                    <el-input v-model="question.answers[index-1]"/>
+                  </el-form-item>
+                  <el-form-item>
+                    <el-button @click="question.answersCount++">Add Answer Field</el-button>
+                  </el-form-item>
+
+                  <el-form-item>
+                    <el-button @click="store.addQuestion(question)">Create</el-button>
+                  </el-form-item>
+                </el-form>
+              </el-card>
+            </el-col>
+
+
+          </el-row>
+
+
+        </el-tab-pane>
+
+
+        <el-tab-pane label="Next Game" name="game">
+          <el-row :gutter="20">
+
+            <el-col :lg="12">
+              <div class="grid-content">
+                <el-card class="box-card">
+                  <template #header>
+                    <div class="card-header">
+                      <span>Existing questions</span>
+                    </div>
+                  </template>
+
+
+                </el-card>
+              </div>
+            </el-col>
+            <el-col :lg="12">
+              <el-card class="box-card">
+                <template #header>
+                  <div class="card-header">
+                    <span>Question control</span>
+                  </div>
+                </template>
+                <el-tag>Connected Players : {{ connectedPlayers }}</el-tag>
+                <p v-if="store.question">{{ store.question.question }}</p>
+                <el-form-item>
+                  <el-button v-if="store.question" v-for="answer in store.question.answers" style="width: 100%"
+                             @click.prevent="store.sendAnswer(answer)"> {{ answer }}
+                  </el-button>
+                </el-form-item>
+              </el-card>
+            </el-col>
+
+          </el-row>
+
+        </el-tab-pane>
+      </el-tabs>
+
+    </el-main>
+  </el-container>
 </template>
 
 <script>
 import {store} from './store';
+import GameList from "./components/GameList.vue";
+import {getGameStatistic} from "./services/statistic-api";
+import draggable from "vuedraggable";
+import Questions from "./components/Questions.vue";
 
 export default {
-  components: {},
+  components: {Questions, draggable, GameList},
+  beforeCreate() {
+    store.createConnection();
+    store.getQuestions();
+    setInterval(function () {
+      getGameStatistic().then(data => this.connectedPlayers = data.connectedPlayers.Count - 1);
+    }.bind(this), 10000);
+  },
   data() {
     return {
+      connectedPlayers: 0,
+      question: {
+        question: '',
+        answers: [],
+        answersCount: 1,
+        correctAnswer: '',
+        duration: 0,
+      },
       store
     };
-  },
+  }
 };
 </script>
-
-<style scoped>
-
-.custom-height {
-  min-height: 100vh;
-}
-
-@media only screen and (max-width: 800px) {
-  .custom-height {
-    /* 92vh to make up for the toolbar in the mobile browser */
-    min-height: 92vh;
-  }
-}
-</style>

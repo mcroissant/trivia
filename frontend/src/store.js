@@ -1,5 +1,10 @@
 import {reactive} from 'vue';
 import {shuffle} from './helpers';
+import {getQuestions} from './services/question-api';
+import axios from "axios";
+
+const questionApiBaseUrl = import.meta.env.VITE_JS_QUESTION_API_BASE_URL;
+const realTimeApiUrl = import.meta.env.VITE_JS_REALTIME_WSS;
 
 export const store = reactive({
     score: 0,
@@ -18,21 +23,29 @@ export const store = reactive({
     failure: false,
     newMessage: null,
     connection:null,
+    questions: [],
+    question: null,
     incrementScore() {
         this.score++;
     },
-    getData() {
-        this.loading = true;
+    createConnection(){
         console.log("Starting connection to WebSocket Server")
-        this.connection = new WebSocket("wss://oi2emnutnh.execute-api.us-east-1.amazonaws.com/Prod")
+        this.connection = new WebSocket(realTimeApiUrl)
 
         this.connection.onopen = function (event) {
             console.log(event)
             console.log("Successfully connected to the echo websocket server...")
         }
+    },
+    getData() {
+        this.loading = true;
 
+        if(this.connection == null){
+            this.createConnection();
+        }
         this.connection.onmessage = function (event) {
             var res = JSON.parse(event.data)
+            console.log("recieved message : "+ res)
             console.log(res)
             if (res.message_type === 0) {
                 res.results.map((item) => {
@@ -85,12 +98,26 @@ export const store = reactive({
     },
 
     sendNewMessage(){
-        if(this.connection == null){
-            this.connection = new WebSocket("wss://oi2emnutnh.execute-api.us-east-1.amazonaws.com/Prod")
-        }
-
         this.connection.send(this.newMessage);
         this.newMessage = null;
+    },
+    getQuestions(){
+        getQuestions().then(response => (store.questions = response.data.Items))
+    },
+    addQuestion(question){
+        axios
+            .post(questionApiBaseUrl+'questions/', question)
+            .then(response => this.getQuestions())
+    },
+    sendQuestion(index){
+        store.question = store.questions[index]
+        let data = JSON.stringify({"action":"sendmessage", "data":JSON.stringify({"message_type":0,"results":[{"question":store.questions[index].question,"answers":store.questions[index].answers}]})})
+        this.connection.send(data);
 
+    },
+    sendAnswer(answer){
+        let data = JSON.stringify( {"action":"sendmessage", "data":JSON.stringify({"message_type":1,"answer":answer})})
+        this.connection.send(data);
+        store.question = null;
     }
 });

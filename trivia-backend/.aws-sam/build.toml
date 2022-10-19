@@ -28,15 +28,6 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["AddQuestionFunction"]
 
-[function_build_definitions.c2719df4-a2fb-4493-b08f-085886b888f7]
-codeuri = "C:\\Users\\croissam\\Documents\\GitHub\\trivia\\trivia-backend\\get_question"
-runtime = "nodejs12.x"
-architecture = "x86_64"
-handler = "app.handler"
-manifest_hash = ""
-packagetype = "Zip"
-functions = ["GetQuestionFunction"]
-
 [function_build_definitions.ea139135-96f7-4c74-922f-fdb3f7f64876]
 codeuri = "C:\\Users\\croissam\\Documents\\GitHub\\trivia\\trivia-backend\\delete_question"
 runtime = "nodejs12.x"
@@ -64,7 +55,16 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["SendMessageFunction"]
 
-[function_build_definitions.d17849c1-58d8-4156-9589-c3d0706b1d6c]
+[function_build_definitions.838592c5-4c33-4bec-85aa-628602fe1f35]
+codeuri = "C:\\Users\\croissam\\Documents\\GitHub\\trivia\\trivia-backend\\get_question"
+runtime = "nodejs12.x"
+architecture = "x86_64"
+handler = "app.handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["GetQuestionFunction"]
+
+[function_build_definitions.b8f41744-d2f9-4985-8bf7-bd26c9c32c9a]
 codeuri = "C:\\Users\\croissam\\Documents\\GitHub\\trivia\\trivia-backend\\get_questions"
 runtime = "nodejs12.x"
 architecture = "x86_64"
@@ -72,5 +72,14 @@ handler = "app.handler"
 manifest_hash = ""
 packagetype = "Zip"
 functions = ["GetQuestionsFunction"]
+
+[function_build_definitions.4af80526-14fa-45f9-918a-422130c52410]
+codeuri = "C:\\Users\\croissam\\Documents\\GitHub\\trivia\\trivia-backend\\get_game_statistics"
+runtime = "nodejs12.x"
+architecture = "x86_64"
+handler = "app.handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["GetGameStatisticsFunction"]
 
 [layer_build_definitions]

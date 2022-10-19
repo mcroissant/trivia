@@ -10,7 +10,7 @@ exports.handler = async event => {
     TableName: process.env.TABLE_NAME,
     /* Item properties will depend on your application concerns */
     Key: {
-      questionId: event.body.questionId
+      questionId: event.pathParameters['questionId']
     }
   }
 

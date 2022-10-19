@@ -93,10 +93,16 @@ export default {
           <g>
 </g>
 </svg>
+        <div class="w-11/12 mx-auto grid grid-cols-1 gap-y-8 lg:w-5/12">
+          <h1 class="text-center text-3xl my-12 font-bold">
+            Bonne réponse
+          </h1>
+        </div>
       </div>
 
-      <div class="flex items-center"  v-show="store.failure">
-        <svg width="240" height="240" id="Layer_2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+      <div class="flex items-center" v-show="store.failure">
+        <svg width="240" height="240" id="Layer_2" xmlns="http://www.w3.org/2000/svg"
+             xmlns:xlink="http://www.w3.org/1999/xlink"
              x="0px" y="0px"
              viewBox="0 0 512 512" style="enable-background:new 0 0 512 512;" xml:space="preserve">
 <circle style="fill:#FF757C;" cx="256" cy="256" r="245.801"/>
@@ -153,6 +159,11 @@ export default {
           <g>
 </g>
 </svg>
+        <div class="w-11/12 mx-auto grid grid-cols-1 gap-y-8">
+          <h1 class="text-center text-3xl my-12 font-bold">
+            Essaye encore
+          </h1>
+        </div>
       </div>
     </div>
   </div>
